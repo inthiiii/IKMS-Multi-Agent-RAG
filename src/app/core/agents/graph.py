@@ -7,7 +7,7 @@ import uuid
 from langgraph.constants import END, START
 from langgraph.graph import StateGraph
 
-# FIX: Added memory_summarizer_node to imports
+# IMPORT THE NEW NODE HERE
 from .agents import (
     retrieval_node, 
     summarization_node, 
@@ -21,17 +21,17 @@ def create_qa_graph() -> Any:
     """Create and compile the conversational multi-agent QA graph."""
     builder = StateGraph(QAState)
 
-    # Add nodes for each agent
+    # Add nodes
     builder.add_node("retrieval", retrieval_node)
     builder.add_node("summarization", summarization_node)
     builder.add_node("verification", verification_node)
-    builder.add_node("memory_summarizer", memory_summarizer_node) # Max Marks Feature
+    builder.add_node("memory_summarizer", memory_summarizer_node) # <--- New Node
 
     # Define flow
     builder.add_edge(START, "retrieval")
     builder.add_edge("retrieval", "summarization")
     builder.add_edge("summarization", "verification")
-    builder.add_edge("verification", "memory_summarizer")
+    builder.add_edge("verification", "memory_summarizer") # <--- Route through summarizer
     builder.add_edge("memory_summarizer", END)
 
     return builder.compile()
@@ -39,12 +39,10 @@ def create_qa_graph() -> Any:
 
 @lru_cache(maxsize=1)
 def get_qa_graph() -> Any:
-    """Get the compiled QA graph instance (singleton via LRU cache)."""
     return create_qa_graph()
 
 
 def run_qa_flow(question: str) -> Dict[str, Any]:
-    """Legacy entry point."""
     return run_conversational_qa_flow(question)
 
 
@@ -66,9 +64,8 @@ def run_conversational_qa_flow(
         "context": None,
         "draft_answer": None,
         "answer": None,
-        "conversation_summary": None, 
+        "conversation_summary": None, # Initializing as None
     }
 
     final_state = graph.invoke(initial_state)
-
     return final_state

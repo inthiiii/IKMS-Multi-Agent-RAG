@@ -24,6 +24,9 @@ with st.sidebar:
     if st.button("Start New Conversation", type="primary"):
         st.session_state.session_id = str(uuid.uuid4())
         st.session_state.messages = []
+        # Clear summary on new chat
+        if "latest_summary" in st.session_state:
+            del st.session_state.latest_summary
         st.rerun()
     
     st.divider()
@@ -45,14 +48,12 @@ with st.sidebar:
     st.divider()
     st.subheader("🧠 Memory Inspector")
     
-    # Fetch summary (You might need a new API endpoint for this, 
-    # but for now let's just assume the API returns it or we fetch history)
-    # To keep it simple, we will just show a placeholder or fetch if you add the endpoint.
-    
-    # Ideally, add this endpoint to api.py:
-    # @app.get("/qa/session/{session_id}/summary")
-    
-    st.info("Conversation Summary will appear here after 5 turns.")
+    # Check if we have a summary stored in session state
+    if "latest_summary" in st.session_state and st.session_state.latest_summary:
+        st.success("Summary Generated:")
+        st.markdown(st.session_state.latest_summary)
+    else:
+        st.info("Chat for at least 3 turns to generate a summary.")
 
 # --- Chat Interface ---
 
@@ -60,7 +61,6 @@ with st.sidebar:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        # If there is context saved with the message, show it
         if "context" in message and message["context"]:
             with st.expander("📚 View Retrieved Context (Evidence)"):
                 st.markdown(message["context"])
@@ -88,21 +88,28 @@ if prompt := st.chat_input("Ask a question about your PDF..."):
                 data = response.json()
                 answer = data.get("answer", "No answer received.")
                 context = data.get("context", "")
-                
+                summary = data.get("conversation_summary", "")
+
                 # Update UI with final answer
                 message_placeholder.markdown(answer)
                 
-                # Show context in an expander (Requirements: "Visual feedback")
+                # Show context
                 if context:
                     with st.expander("📚 View Retrieved Context (Evidence)"):
                         st.markdown(context)
                 
-                # Save to local state so it persists on refresh
+                # Save message BEFORE checking for summary/rerun
                 st.session_state.messages.append({
                     "role": "assistant", 
                     "content": answer,
                     "context": context
                 })
+
+                # Handle Summary Update (Green Box)
+                if summary:
+                    st.session_state.latest_summary = summary
+                    st.rerun() # Now it is safe to rerun because message is saved
+                    
             else:
                 message_placeholder.error(f"API Error: {response.text}")
         except Exception as e:

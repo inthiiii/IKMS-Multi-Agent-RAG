@@ -30,6 +30,7 @@ class ConversationalQAResponse(BaseModel):
     answer: str
     session_id: str
     context: str
+    conversation_summary: Optional[str] = None
 
 class ConversationHistory(BaseModel):
     """Model for retrieving full history."""

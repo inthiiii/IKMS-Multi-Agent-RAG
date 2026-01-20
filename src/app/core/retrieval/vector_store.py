@@ -57,7 +57,7 @@ def index_documents(documents: List[Document]) -> int:
 def index_pdf_file(file_path: Path) -> int:
     """Load a PDF and index its pages."""
     
-    # 1. Use PyMuPDFLoader (Robust against 'bbox' errors)
+    # 1. Use PyMuPDFLoader (As a solution against 'bbox' errors)
     loader = PyMuPDFLoader(str(file_path))
     
     # 2. Load pages

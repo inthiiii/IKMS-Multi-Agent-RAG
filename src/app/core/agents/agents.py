@@ -4,7 +4,6 @@ from typing import List, Dict, Any
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage, SystemMessage
-from langchain_core.prompts import SystemMessagePromptTemplate
 
 from ..llm.factory import create_chat_model
 from .prompts import (
@@ -76,15 +75,12 @@ def retrieval_node(state: QAState) -> QAState:
     messages = result.get("messages", [])
     context = ""
 
-    # Prefer the last ToolMessage content
     for msg in reversed(messages):
         if isinstance(msg, ToolMessage):
             context = str(msg.content)
             break
 
-    return {
-        "context": context,
-    }
+    return {"context": context}
 
 
 def summarization_node(state: QAState) -> QAState:
@@ -106,9 +102,7 @@ def summarization_node(state: QAState) -> QAState:
     messages = result.get("messages", [])
     draft_answer = _extract_last_ai_content(messages)
 
-    return {
-        "draft_answer": draft_answer,
-    }
+    return {"draft_answer": draft_answer}
 
 
 def verification_node(state: QAState) -> QAState:
@@ -118,14 +112,9 @@ def verification_node(state: QAState) -> QAState:
     draft_answer = state.get("draft_answer", "")
     
     user_content = f"""Question: {question}
-
-Context:
-{context}
-
-Draft Answer:
-{draft_answer}
-
-Please verify and correct the draft answer."""
+    Context: {context}
+    Draft Answer: {draft_answer}
+    Please verify and correct the draft answer."""
 
     result = verification_agent.invoke(
         {"messages": [HumanMessage(content=user_content)]}
@@ -133,9 +122,7 @@ Please verify and correct the draft answer."""
     messages = result.get("messages", [])
     answer = _extract_last_ai_content(messages)
 
-    return {
-        "answer": answer,
-    }
+    return {"answer": answer}
 
 # --- Feature 5 Extension: Memory Summarizer ---
 
@@ -144,9 +131,8 @@ def summarize_conversation(history: List[Dict[str, Any]]) -> str:
     llm = create_chat_model()
     history_text = _format_history(history)
     
-    # Simple direct invocation
     msg = HumanMessage(content=(
-        f"Summarize the key points of this conversation in 3-4 sentences:\n\n{history_text}"
+        f"Summarize the key points of this conversation in 3 bullet points:\n\n{history_text}"
     ))
     response = llm.invoke([msg])
     return str(response.content)
@@ -156,8 +142,8 @@ def memory_summarizer_node(state: QAState) -> QAState:
     history = state.get("history", [])
     existing_summary = state.get("conversation_summary", "")
 
-    # Only summarize if we have more than 2 turns (lowered for testing)
-    if len(history) > 2:
+    # TRIGGER: Summarize after just 3 turns
+    if len(history) >= 2:
         new_summary = summarize_conversation(history)
         return {"conversation_summary": new_summary}
     

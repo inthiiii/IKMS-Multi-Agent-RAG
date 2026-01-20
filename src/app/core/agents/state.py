@@ -17,3 +17,6 @@ class QAState(TypedDict):
     context: str | None
     draft_answer: str | None
     answer: str | None
+
+    # Feature 5 Extension: Conversation Summary
+    conversation_summary: Optional[str]
