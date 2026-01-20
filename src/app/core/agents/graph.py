@@ -1,38 +1,38 @@
 """LangGraph orchestration for the linear multi-agent QA flow."""
 
 from functools import lru_cache
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
+import uuid
 
 from langgraph.constants import END, START
 from langgraph.graph import StateGraph
 
-from .agents import retrieval_node, summarization_node, verification_node
+# FIX: Added memory_summarizer_node to imports
+from .agents import (
+    retrieval_node, 
+    summarization_node, 
+    verification_node, 
+    memory_summarizer_node
+)
 from .state import QAState
 
 
 def create_qa_graph() -> Any:
-    """Create and compile the linear multi-agent QA graph.
-
-    The graph executes in order:
-    1. Retrieval Agent: gathers context from vector store
-    2. Summarization Agent: generates draft answer from context
-    3. Verification Agent: verifies and corrects the answer
-
-    Returns:
-        Compiled graph ready for execution.
-    """
+    """Create and compile the conversational multi-agent QA graph."""
     builder = StateGraph(QAState)
 
     # Add nodes for each agent
     builder.add_node("retrieval", retrieval_node)
     builder.add_node("summarization", summarization_node)
     builder.add_node("verification", verification_node)
+    builder.add_node("memory_summarizer", memory_summarizer_node) # Max Marks Feature
 
-    # Define linear flow: START -> retrieval -> summarization -> verification -> END
+    # Define flow
     builder.add_edge(START, "retrieval")
     builder.add_edge("retrieval", "summarization")
     builder.add_edge("summarization", "verification")
-    builder.add_edge("verification", END)
+    builder.add_edge("verification", "memory_summarizer")
+    builder.add_edge("memory_summarizer", END)
 
     return builder.compile()
 
@@ -44,29 +44,29 @@ def get_qa_graph() -> Any:
 
 
 def run_qa_flow(question: str) -> Dict[str, Any]:
-    """Run the complete multi-agent QA flow for a question.
+    """Legacy entry point."""
+    return run_conversational_qa_flow(question)
 
-    This is the main entry point for the QA system. It:
-    1. Initializes the graph state with the question
-    2. Executes the linear agent flow (Retrieval -> Summarization -> Verification)
-    3. Extracts and returns the final results
 
-    Args:
-        question: The user's question about the vector databases paper.
-
-    Returns:
-        Dictionary with keys:
-        - `answer`: Final verified answer
-        - `draft_answer`: Initial draft answer from summarization agent
-        - `context`: Retrieved context from vector store
-    """
+def run_conversational_qa_flow(
+    question: str,
+    history: Optional[List[Dict[str, Any]]] = None,
+    session_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """Run the complete multi-agent QA flow with memory."""
     graph = get_qa_graph()
+
+    if not session_id:
+        session_id = str(uuid.uuid4())
 
     initial_state: QAState = {
         "question": question,
+        "history": history or [],
+        "session_id": session_id,
         "context": None,
         "draft_answer": None,
         "answer": None,
+        "conversation_summary": None, 
     }
 
     final_state = graph.invoke(initial_state)

@@ -1,21 +1,16 @@
-"""Service functions for indexing documents into the vector database."""
-
 from pathlib import Path
 
-from langchain_community.document_loaders import PyPDFLoader
-
+from langchain_community.document_loaders import PyMuPDFLoader 
 from ..core.retrieval.vector_store import index_documents
 
-
 def index_pdf_file(file_path: Path) -> int:
-    """Load a PDF from disk and index it into the vector DB.
-
-    Args:
-        file_path: Path to the PDF file on disk.
-
-    Returns:
-        Number of document chunks indexed.
-    """
-    loader = PyPDFLoader(str(file_path))
+    """Load a PDF and index its pages using PyMuPDF."""
+    
+    # 1. Load the PDF using PyMuPDF (fitz)
+    loader = PyMuPDFLoader(str(file_path))
+    
+    # 2. Split into pages
     docs = loader.load()
+    
+    # 3. Index them using our core vector store logic
     return index_documents(docs)

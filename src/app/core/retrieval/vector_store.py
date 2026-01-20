@@ -1,83 +1,67 @@
-"""Vector store wrapper for Pinecone integration with LangChain."""
+# src/app/core/retrieval/vector_store.py
 
+import os
 from pathlib import Path
-from functools import lru_cache
-from typing import List
+from typing import List, Any
 
-from pinecone import Pinecone
-from langchain_core.documents import Document
+# Switched to PyMuPDFLoader for better reliability
+from langchain_community.document_loaders import PyMuPDFLoader 
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
 
+def get_vector_store() -> PineconeVectorStore:
+    """Get the Pinecone vector store instance."""
+    
+    # Use the cheaper embedding model
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
-from ..config import get_settings
+    index_name = os.getenv("PINECONE_INDEX_NAME", "knowledge-index")
 
+    # Connect to existing index
+    vector_store = PineconeVectorStore(
+        index_name=index_name,
+        embedding=embeddings
+    )
+    
+    return vector_store
 
-@lru_cache(maxsize=1)
-def _get_vector_store() -> PineconeVectorStore:
-    """Create a PineconeVectorStore instance configured from settings."""
-    settings = get_settings()
-
-    pc = Pinecone(api_key=settings.pinecone_api_key)
-    index = pc.Index(settings.pinecone_index_name)
-
-    embeddings = OpenAIEmbeddings(
-        model=settings.openai_embedding_model_name,
-        api_key=settings.openai_api_key,
+def get_retriever(k: int = 5) -> Any:
+    """Get a retriever interface from the vector store."""
+    vector_store = get_vector_store()
+    return vector_store.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": k}
     )
 
-    return PineconeVectorStore(
-        index=index,
-        embedding=embeddings,
+def retrieve(query: str, k: int = 8) -> List[Document]:
+    """Retrieve relevant documents for a query string.
+    
+    Args:
+        query: The search text.
+        k: The number of documents to return (default 4).
+    """
+    vector_store = get_vector_store()
+    retriever = vector_store.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": k}
     )
-
-def get_retriever(k: int | None = None):
-    """Get a Pinecone retriever instance.
-
-    Args:
-        k: Number of documents to retrieve (defaults to config value).
-
-    Returns:
-        PineconeVectorStore instance configured as a retriever.
-    """
-    settings = get_settings()
-    if k is None:
-        k = settings.retrieval_k
-
-    vector_store = _get_vector_store()
-    return vector_store.as_retriever(search_kwargs={"k": k})
-
-
-def retrieve(query: str, k: int | None = None) -> List[Document]:
-    """Retrieve documents from Pinecone for a given query.
-
-    Args:
-        query: Search query string.
-        k: Number of documents to retrieve (defaults to config value).
-
-    Returns:
-        List of Document objects with metadata (including page numbers).
-    """
-    retriever = get_retriever(k=k)
     return retriever.invoke(query)
 
-def index_documents(file_path: Path) -> int:
-    """Index a list of Document objects into the Pinecone vector store.
+def index_documents(documents: List[Document]) -> int:
+    """Index a list of documents into Pinecone."""
+    vector_store = get_vector_store()
+    ids = vector_store.add_documents(documents)
+    return len(ids)
 
-    Args:
-        docs: Documents to embed and upsert into the vector index.
-
-    Returns:
-        The number of documents indexed.
-    """
-    loader = PyPDFLoader(str(file_path), mode="single")
+def index_pdf_file(file_path: Path) -> int:
+    """Load a PDF and index its pages."""
+    
+    # 1. Use PyMuPDFLoader (Robust against 'bbox' errors)
+    loader = PyMuPDFLoader(str(file_path))
+    
+    # 2. Load pages
     docs = loader.load()
-
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    texts = text_splitter.split_documents(docs)
-
-    vector_store = _get_vector_store()
-    vector_store.add_documents(texts)
-    return len(texts)
+    
+    # 3. Index them
+    return index_documents(docs)
