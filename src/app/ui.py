@@ -108,7 +108,7 @@ if prompt := st.chat_input("Ask a question about your PDF..."):
                 # Handle Summary Update (Green Box)
                 if summary:
                     st.session_state.latest_summary = summary
-                    st.rerun() # Now it is safe to rerun because message is saved
+                    st.rerun()
                     
             else:
                 message_placeholder.error(f"API Error: {response.text}")
